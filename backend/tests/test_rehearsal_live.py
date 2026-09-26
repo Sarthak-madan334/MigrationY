@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 import pytest
 from pydantic import ValidationError
 
+from app.main import app as api_app
 from app.models.schemas import QueryManifest, QueryResult, RunResultResponse, RunStatusResponse
 from app.routers import rehearsal
 
@@ -65,6 +66,21 @@ def test_history_route_returns_current_run_summaries(monkeypatch) -> None:
 def test_query_manifest_rejects_empty_workloads() -> None:
 	with pytest.raises(ValidationError):
 		QueryManifest(queries=[])
+
+
+def test_deployed_frontend_origin_passes_api_cors_preflight() -> None:
+	with TestClient(api_app) as client:
+		response = client.options(
+			"/api/auth/github/session",
+			headers={
+				"Origin": "https://migration-z.vercel.app",
+				"Access-Control-Request-Method": "GET",
+				"Access-Control-Request-Headers": "content-type",
+			},
+		)
+
+	assert response.status_code == 200
+	assert response.headers["access-control-allow-origin"] == "https://migration-z.vercel.app"
 
 
 def test_result_route_returns_measured_result_and_duration(monkeypatch) -> None:
