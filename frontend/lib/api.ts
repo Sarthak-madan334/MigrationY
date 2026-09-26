@@ -34,7 +34,7 @@ export type GitHubMigration = { path: string; diff_preview: string; detected_dia
 export type GitHubMigrationSource = { path: string; sql: string };
 export type FaqTurn = { question: string; answer: string };
 
-const apiOrigin = (process.env.NEXT_PUBLIC_API_URL ?? (process.env.NODE_ENV === "production" ? "https://migrationy.onrender.com" : "http://localhost:8000")).replace(/\/$/, "");
+const apiOrigin = (process.env.NODE_ENV === "production" ? "https://migrationy.onrender.com" : (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000")).replace(/\/$/, "");
 export const apiBase = apiOrigin.endsWith("/api") ? apiOrigin : `${apiOrigin}/api`;
 const requestTimeoutMs = 15_000;
 
