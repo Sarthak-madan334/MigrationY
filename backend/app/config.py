@@ -8,6 +8,7 @@ load_dotenv()
 
 @dataclass(frozen=True)
 class Settings:
+    database_url: str | None = os.getenv("DATABASE_URL")
     postgres_host: str = os.getenv("POSTGRES_HOST", "localhost")
     postgres_port: int = int(os.getenv("POSTGRES_PORT", "5433"))
     postgres_db: str = os.getenv("POSTGRES_DB", "migration_rehearsal")
