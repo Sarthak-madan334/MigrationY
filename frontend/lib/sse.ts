@@ -1,4 +1,4 @@
-import { getRunStatus, type RunStage, type RunStatus } from "./api";
+import { apiBase, getRunStatus, type RunStage, type RunStatus } from "./api";
 
 export type RunConnection = "connecting" | "streaming" | "polling" | "disconnected";
 
@@ -14,7 +14,6 @@ export function subscribeToRunStatus(
   let stopped = false;
   let pollingTimer: number | undefined;
   let pollingInFlight = false;
-  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
   const streamUrl = `${apiBase.replace(/\/$/, "")}/rehearsal/${encodeURIComponent(runId)}/stream`;
   const source = new EventSource(streamUrl, { withCredentials: true });
 

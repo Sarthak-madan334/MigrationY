@@ -33,7 +33,7 @@ export type GitHubMigration = { path: string; diff_preview: string; detected_dia
 export type GitHubMigrationSource = { path: string; sql: string };
 export type FaqTurn = { question: string; answer: string };
 
-const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
+export const apiBase = process.env.NEXT_PUBLIC_API_URL ?? (process.env.NODE_ENV === "production" ? "https://migrationy.onrender.com/api" : "http://localhost:8000/api");
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBase}${path}`, { ...init, credentials: "include", headers: { "Content-Type": "application/json", ...init?.headers } });
