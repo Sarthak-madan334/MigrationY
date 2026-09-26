@@ -3,10 +3,9 @@
 import { ArrowRight, Check, FileCode2, Github, LoaderCircle, LogOut, Upload, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { beginGitHubOAuth, createRehearsal, disconnectGitHub, getGitHubSession, listGitHubMigrations, listGitHubRepos, type GitHubMigration, type GitHubRepo, type GitHubUser } from "@/lib/api";
+import { beginGitHubOAuth, createRehearsal, disconnectGitHub, getGitHubMigrationSource, getGitHubSession, listGitHubMigrations, listGitHubRepos, type GitHubMigration, type GitHubRepo, type GitHubUser } from "@/lib/api";
 
 export default function ConnectPage() {
-	const [manifestReady, setManifestReady] = useState(false);
 	const [starting, setStarting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [githubUser, setGitHubUser] = useState<GitHubUser | null>(null);
@@ -18,7 +17,6 @@ export default function ConnectPage() {
 	const [loadingMigrations, setLoadingMigrations] = useState(false);
 	const [connecting, setConnecting] = useState(false);
 	const sampleMode = selectedRepoId === "sample";
-	const selectedRepo = repos.find((repo) => repo.id === selectedRepoId);
 	const selectedMigration = migrations.find((migration) => migration.path === selectedMigrationPath);
 
 	useEffect(() => {
@@ -40,7 +38,7 @@ export default function ConnectPage() {
 		};
 		void checkSession();
 		const query = new URLSearchParams(window.location.search);
-		if (query.get("github_error") === "authorization_cancelled") setError("GitHub authorization was cancelled. You can retry or use the local sample.");
+		if (query.get("github_error") === "authorization_cancelled") setError("GitHub authorization was cancelled. You can retry or use the built-in example.");
 		if (query.has("github")) window.history.replaceState({}, "", "/connect");
 		if (query.has("github_error")) window.history.replaceState({}, "", "/connect");
 		return () => { active = false; };
@@ -75,7 +73,7 @@ export default function ConnectPage() {
 			window.location.assign(authorization.authorization_url);
 		} catch (oauthError) {
 			setError(oauthError instanceof Error && oauthError.message.includes("503")
-				? "GitHub OAuth is not configured on this backend. Use the local sample repository for now."
+				? "GitHub sign-in is not configured on this backend. You can still run the built-in example."
 				: "GitHub authorization could not be started.");
 			setConnecting(false);
 		}
@@ -93,14 +91,19 @@ export default function ConnectPage() {
 	}
 
 	async function startRun() {
-		if (!sampleMode) return;
+		if (!sampleMode && (!selectedRepoId || !selectedMigration || selectedMigration.detected_dialect !== "postgres" || !selectedMigrationPath.toLowerCase().endsWith(".sql"))) {
+			setError("Choose a PostgreSQL .sql migration to review.");
+			return;
+		}
 		setStarting(true);
 		setError(null);
 		try {
-			const run = await createRehearsal();
+			const source = sampleMode ? undefined : await getGitHubMigrationSource(selectedRepoId, selectedMigrationPath);
+			const run = await createRehearsal(source ? { repo_id: selectedRepoId, migration_path: source.path, migration_sql: source.sql } : undefined);
 			window.location.href = `/run/${run.run_id}`;
-		} catch {
-			setError("The backend did not accept the rehearsal request.");
+		} catch (runError) {
+			const reason = runError instanceof Error ? runError.message : "Unknown error";
+			setError(`The rehearsal could not start: ${reason}`);
 			setStarting(false);
 		}
 	}
@@ -119,31 +122,13 @@ export default function ConnectPage() {
 					</span>
 					<span className="brand-text">MIGRATION REHEARSAL</span>
 				</Link>
-				<div className="eyebrow eyebrow-inline">Connect / phase 01</div>
+				<div className="eyebrow eyebrow-inline">Database rehearsal</div>
 			</header>
 
 			<div className="connect-intro">
-				<div className="eyebrow">Ready the rehearsal</div>
-				<h1 className="connect-title">Connect the change surface.</h1>
-				<p className="connect-subtitle">Choose the repository, migration, and workload the shadow database should prove.</p>
-			</div>
-
-			<div className="connect-steps" aria-label="Rehearsal setup steps">
-				<div className={`connect-step ${sampleMode || githubUser ? "is-complete" : "is-active"}`} style={{ animationDelay: "0ms" }}>
-					<div className="step-label">{sampleMode || githubUser ? <Check size={14} /> : <span className="step-dot" />} 01 / CONNECT REPO</div>
-					<div className="step-name">{sampleMode ? "Local sample repository" : selectedRepo?.full_name ?? "Choose a repository"}</div>
-					<div className="step-meta">{sampleMode ? "No OAuth required" : githubUser ? `Connected as @${githubUser.login}` : "Read-only public repository access"}</div>
-				</div>
-				<div className={`connect-step ${selectedMigrationPath ? "is-active" : "is-upcoming"}`} style={{ animationDelay: "120ms" }}>
-					<div className="step-label"><span className="step-dot" /> 02 / SELECT MIGRATION</div>
-					<div className="step-name">{sampleMode ? "phase0/add_status_index.sql" : selectedMigrationPath || "Select a repository first"}</div>
-					<div className="step-meta">{sampleMode ? "PostgreSQL · +1 index" : selectedMigration?.detected_dialect ?? "Detected from GitHub"}</div>
-				</div>
-				<div className="connect-step is-upcoming" style={{ animationDelay: "240ms" }}>
-					<div className="step-label">03 / SELECT MANIFEST</div>
-					<div className="step-name">Representative workload</div>
-					<div className="step-meta">Six sample queries · null pressure profile</div>
-				</div>
+				<div className="eyebrow">Migration review</div>
+				<h1 className="connect-title">Set up a rehearsal.</h1>
+				<p className="connect-subtitle">Choose a GitHub migration to review against a small PostgreSQL dataset and sample queries.</p>
 			</div>
 
 			<div className="file-grid">
@@ -151,14 +136,14 @@ export default function ConnectPage() {
 					<div className="file-panel-header">
 						<div>
 							<div className="panel-title">Repository and migration</div>
-							<div className="panel-subtitle">Connect GitHub or use the local sample.</div>
+							<div className="panel-subtitle">Choose a repository and migration file.</div>
 						</div>
 						<Github className="panel-icon" size={19} />
 					</div>
 					<label className="block">
 						<span className="code-label">Repository</span>
 						<select className="manifest-toggle mt-2" value={selectedRepoId} onChange={(event) => setSelectedRepoId(event.target.value)} aria-label="Select repository">
-							<option value="sample">MigrationZ local sample</option>
+							<option value="sample">Built-in example</option>
 							{repos.map((repo) => <option value={repo.id} key={repo.id}>{repo.full_name}</option>)}
 						</select>
 					</label>
@@ -167,7 +152,7 @@ export default function ConnectPage() {
 						<span className="code-label">Detected migration</span>
 						{loadingMigrations ? <span className="manifest-toggle mt-2 justify-start">Loading migration files...</span> : migrations.length ? <select className="manifest-toggle mt-2" value={selectedMigrationPath} onChange={(event) => setSelectedMigrationPath(event.target.value)} aria-label="Select migration">{migrations.map((migration) => <option value={migration.path} key={migration.path}>{migration.path}</option>)}</select> : <span className="manifest-toggle mt-2 justify-start">No migration files detected</span>}
 					</label> : <div className="code-block mt-4">
-						<div className="code-label">migrations / phase0 / add_status_index.sql</div>
+						<div className="code-label">Built-in PostgreSQL migration</div>
 						<div className="diff-line" style={{ animationDelay: "220ms" }}>+ CREATE INDEX orders_status_idx</div>
 						<div className="diff-line" style={{ animationDelay: "300ms" }}>+ ON orders (status);</div>
 					</div>}
@@ -178,25 +163,26 @@ export default function ConnectPage() {
 					<div className="file-panel-header">
 						<div>
 							<div className="panel-title">Query manifest</div>
-							<div className="panel-subtitle">Use the Phase 0 workload for this rehearsal.</div>
+							<div className="panel-subtitle">Compare before and after with six sample queries.</div>
 						</div>
 						<Upload className="panel-icon" size={19} />
 					</div>
-					<button
-						className={`manifest-toggle ${manifestReady ? "is-ready" : ""}`}
-						onClick={() => setManifestReady(!manifestReady)}
-					>
+					<div className="manifest-toggle is-ready">
 						<span>
 							<span className="manifest-file">sample_query_manifest.yaml</span>
 							<span className="manifest-summary">6 representative PostgreSQL queries</span>
 						</span>
-						{manifestReady ? <Check className="manifest-check" size={18} /> : <span className="manifest-action">USE SAMPLE</span>}
-					</button>
+						<Check className="manifest-check" size={18} />
+					</div>
 				</section>
 			</div>
 
 			<div className="connect-footer">
-				{sampleMode ? <><div className="footer-note"><Github size={15} /> OAuth is optional for the local sample rehearsal.</div><button className="button-primary" disabled={!manifestReady || starting} onClick={startRun}>{starting ? "Starting rehearsal..." : "Run Rehearsal"}<ArrowRight size={16} /></button></> : <><div className="footer-note"><FileCode2 size={15} /> Repository and migration selected for GitHub integration.</div><button className="button-secondary" onClick={() => { setSelectedRepoId("sample"); setManifestReady(false); }}>Use local sample</button></>}
+				<div className="footer-note"><FileCode2 size={15} /> {sampleMode ? "Runs the example migration against 50 generated orders and six sample queries." : "Runs on 50 generated orders and six sample queries. Migration must match the demo orders schema."}</div>
+				<div className="flex items-center gap-3">
+					{!sampleMode ? <button className="button-secondary" onClick={() => setSelectedRepoId("sample")}>Use built-in example</button> : null}
+					<button className="button-primary" disabled={starting || (!sampleMode && (!selectedMigration || selectedMigration.detected_dialect !== "postgres" || !selectedMigrationPath.toLowerCase().endsWith(".sql")))} onClick={startRun}>{starting ? <><LoaderCircle className="animate-spin" size={15} /> Starting…</> : <>Run Rehearsal<ArrowRight size={16} /></>}</button>
+				</div>
 			</div>
 			{error ? <div className="error-banner"><X size={14} /> {error}</div> : null}
 		</main>

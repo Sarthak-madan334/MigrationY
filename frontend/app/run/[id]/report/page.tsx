@@ -67,12 +67,12 @@ function ReportContent({ id }: { id: string }) {
 			<VerdictBanner regressed={regressions.length} total={result.queries.length} />
 			<div className="mt-8 flex flex-wrap items-center justify-between gap-4">
 				<div><div className="font-display text-xl">Query results</div><div className="mt-1 text-sm text-muted">Before and after measurements from the shadow database.</div></div>
-				{regressions.length ? <button className="button-secondary" onClick={exportRepro} disabled={exporting}>
+				{regressions.length && result.can_bisect ? <button className="button-secondary" onClick={exportRepro} disabled={exporting}>
 					{exporting ? <LoaderCircle className="animate-spin" size={15} /> : <Download size={15} />}
 					{exporting ? "Preparing minimal repro…" : "Export reproducible case"}
 				</button> : null}
 			</div>
-			<div className="mt-4"><QueryResultsTable queries={result.queries} runId={id} /></div>
+			<div className="mt-4"><QueryResultsTable queries={result.queries} runId={id} canBisect={result.can_bisect} /></div>
 		</> : null}
 		{!loading && error ? <div className="panel flex min-h-[300px] flex-col items-center justify-center px-6 text-center" role="alert">
 			<FileWarning className="mb-5 text-warn" size={28} />

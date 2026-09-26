@@ -23,12 +23,13 @@ class CorruptionProfile(BaseModel):
     null_pressure: float = 0.15
     duplication_rate: float = 0.05
     legacy_format_rate: float = 0.02
-    row_count_per_table: int = 50_000
+    row_count_per_table: int = Field(default=50, ge=1, le=50_000)
 
 
 class RunRequest(BaseModel):
     repo_id: str = "phase-0-demo"
     migration_path: str = "phase0/add_status_index.sql"
+    migration_sql: str | None = Field(default=None, max_length=100_000)
     query_manifest: str | None = None
     corruption_profile: CorruptionProfile = CorruptionProfile()
 
@@ -77,6 +78,7 @@ class QueryResult(BaseModel):
 class RunResultResponse(BaseModel):
     run_id: UUID
     verdict: Literal["regressed", "clean"]
+    can_bisect: bool = True
     queries: list[QueryResult]
 
 
@@ -128,6 +130,11 @@ class GitHubMigration(BaseModel):
 
 class GitHubMigrationList(BaseModel):
     migrations: list[GitHubMigration]
+
+
+class GitHubMigrationSource(BaseModel):
+    path: str
+    sql: str
 
 
 class FaqTurn(BaseModel):

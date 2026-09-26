@@ -3,7 +3,7 @@
 import { ArrowRight, ArrowUpRight, Check, ChevronDown, ChevronUp, Circle, Clock3, Database, FileCode2, Github, Play, ShieldCheck, Sparkles, Terminal, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { askFaqQuestion, createRehearsal, getRunResult, getRunStatus, type FaqTurn, type QueryResult, type RunStage, type RunStatus } from "@/lib/api";
+import { askFaqQuestion, type FaqTurn, type QueryResult, type RunStage, type RunStatus } from "@/lib/api";
 
 const pipeline = [
 	{ key: "provisioning" as RunStage, label: "Creating isolated database" },
@@ -27,20 +27,8 @@ export default function LandingPage() {
 	const [evidenceOpen, setEvidenceOpen] = useState(false);
 	const [faqOpen, setFaqOpen] = useState(false);
 
-	const startRehearsal = async () => {
-		if (demoState === "running") return;
-		setDemoState("running"); setRunError(null); setStatus({ run_id: "pending", stage: "queued", log: [], progress_pct: 0 }); setResult(null); setEvidenceOpen(false);
-		previewRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-		try {
-			const run = await createRehearsal();
-			let finished = false;
-			while (!finished) {
-				const next = await getRunStatus(run.run_id); setStatus(next);
-				if (next.stage === "failed") throw new Error(next.log.at(-1)?.message ?? "The rehearsal failed.");
-				if (next.stage === "done") { const completed = await getRunResult(run.run_id); setResult(completed); setDemoState("done"); finished = true; }
-				else await new Promise((resolve) => window.setTimeout(resolve, 700));
-			}
-		} catch (error) { setRunError(error instanceof Error ? error.message : "The rehearsal could not start."); setDemoState("error"); }
+	const startRehearsal = () => {
+		window.location.assign("/connect");
 	};
 
 	const leadRegression = result?.queries.filter((query) => query.verdict === "regressed").sort((a, b) => b.regression_factor - a.regression_factor)[0];

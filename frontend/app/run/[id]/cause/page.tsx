@@ -26,6 +26,7 @@ export default function CausePage({ params }: { params: Promise<{ id: string }> 
 			setCause(null);
 			try {
 				const report = await getRunResult(id);
+				if (!report.can_bisect) throw new Error("Root cause bisection is currently available only for the built-in sample migration. This report still includes the full query and execution plan review.");
 				const requestedQueryId = new URLSearchParams(window.location.search).get("query");
 				const query = requestedQueryId
 					? report.queries.find((item) => item.id === requestedQueryId)

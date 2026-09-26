@@ -77,6 +77,7 @@ def _run_rehearsal(
     corruption_profile: dict[str, float | int],
     raw_manifest: str | None,
     publish: callable,
+    migration_sql: str | None = None,
 ) -> list[dict[str, object]]:
     """Run one measured rehearsal while publishing state transitions to the API."""
     compose_file = repo_root / "infra" / "docker-compose.yml"
@@ -102,10 +103,11 @@ def _run_rehearsal(
         with connection.cursor() as cursor:
             cursor.execute("CREATE INDEX orders_created_at_idx ON orders (created_at)")
         connection.commit()
-        publish("migrating", 45, "Applying phase0/add_status_index.sql")
+        applied_migration = migration_sql or PHASE1_MIGRATION
+        publish("migrating", 45, "Applying selected GitHub migration" if migration_sql else "Applying phase0/add_status_index.sql")
         measurements_before = [(item, run_query(connection, item.sql), explain_query(connection, item.sql)) for item in manifest.queries]
         with connection.cursor() as cursor:
-            cursor.execute(PHASE1_MIGRATION)
+            cursor.execute(applied_migration)
         connection.commit()
         connection.execute("ANALYZE orders")
 
@@ -137,10 +139,11 @@ def run_rehearsal(
     corruption_profile: dict[str, float | int],
     raw_manifest: str | None,
     publish: callable,
+    migration_sql: str | None = None,
 ) -> list[dict[str, object]]:
     """Serialize access to the shared local shadow Postgres service."""
     with _SHADOW_DB_LOCK:
-        return _run_rehearsal(repo_root, corruption_profile, raw_manifest, publish)
+        return _run_rehearsal(repo_root, corruption_profile, raw_manifest, publish, migration_sql)
 
 
 def _plan_signature(plan: str) -> tuple[str, ...]:

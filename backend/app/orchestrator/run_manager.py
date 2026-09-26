@@ -90,10 +90,16 @@ class RunManager:
                 record.request.corruption_profile.model_dump(),
                 record.request.query_manifest,
                 lambda stage, progress, message: self._publish(run_id, stage, progress, message),
+                record.request.migration_sql,
             )
             verdict = "regressed" if any(item["verdict"] == "regressed" for item in results) else "clean"
             with self._lock:
-                record.result = RunResultResponse(run_id=run_id, verdict=verdict, queries=results)
+                record.result = RunResultResponse(
+                    run_id=run_id,
+                    verdict=verdict,
+                    can_bisect=record.request.migration_sql is None,
+                    queries=results,
+                )
             self._publish(run_id, "done", 100, f"Rehearsal complete: {verdict} verdict")
         except Exception as exc:
             self._publish(run_id, "failed", 100, f"Rehearsal failed: {exc}", level="error")

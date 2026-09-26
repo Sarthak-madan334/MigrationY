@@ -3,10 +3,10 @@ import re
 from urllib.parse import quote
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.github_client import github_get, get_session
-from app.models.schemas import GitHubMigration, GitHubMigrationList, GitHubRepo, GitHubRepoList
+from app.models.schemas import GitHubMigration, GitHubMigrationList, GitHubMigrationSource, GitHubRepo, GitHubRepoList
 
 router = APIRouter(prefix="/repos", tags=["repos"])
 
@@ -17,6 +17,7 @@ MIGRATION_DIRECTORY_NAMES = {
 MIGRATION_SUFFIXES = {".sql", ".py", ".rb", ".js", ".ts", ".php"}
 PREVIEW_LIMIT = 1800
 MIGRATION_LIMIT = 100
+MAX_MIGRATION_BYTES = 100_000
 
 
 def _is_migration_path(path: str) -> bool:
@@ -25,6 +26,14 @@ def _is_migration_path(path: str) -> bool:
 		return path.lower().endswith(tuple(MIGRATION_SUFFIXES))
 	# Flyway permits a flat migration directory and identifies versions by filename.
 	return bool(re.match(r"^v\d+__.+\.sql$", parts[-1]))
+
+
+def _validate_sql_migration_path(path: str) -> None:
+	normalized = path.replace("\\", "/")
+	if normalized.startswith("/") or any(part in {"", ".", ".."} for part in normalized.split("/")):
+		raise HTTPException(status_code=400, detail="invalid_migration_path")
+	if not _is_migration_path(normalized) or not normalized.lower().endswith(".sql"):
+		raise HTTPException(status_code=422, detail="postgres_sql_migration_required")
 
 
 def _require_token(request: Request) -> str:
@@ -127,3 +136,39 @@ async def list_migrations(repo_id: str, request: Request) -> GitHubMigrationList
 	except httpx.HTTPError as error:
 		raise HTTPException(status_code=502, detail="github_migration_scan_failed") from error
 	return GitHubMigrationList(migrations=migrations)
+
+
+@router.get("/{repo_id}/migrations/content", response_model=GitHubMigrationSource)
+async def get_migration_source(
+	repo_id: str,
+	request: Request,
+	path: str = Query(min_length=1, max_length=1024),
+) -> GitHubMigrationSource:
+	if not repo_id.isdecimal():
+		raise HTTPException(status_code=422, detail="repo_id_must_be_numeric")
+	_validate_sql_migration_path(path)
+	token = _require_token(request)
+	try:
+		async with httpx.AsyncClient(timeout=20) as client:
+			repo_response = await _request_github(client, f"/repositories/{repo_id}", token)
+			repo = repo_response.json()
+			full_name = repo["full_name"]
+			branch = repo.get("default_branch") or "main"
+			file_path = f"/repos/{full_name}/contents/{quote(path, safe='/')}"
+			file_response = await _request_github(client, file_path, token, params={"ref": branch})
+			file_data = file_response.json()
+			if file_data.get("type") != "file":
+				raise HTTPException(status_code=404, detail="migration_not_found")
+			if int(file_data.get("size", 0)) > MAX_MIGRATION_BYTES:
+				raise HTTPException(status_code=413, detail="migration_file_too_large")
+			encoded_content = file_data.get("content", "")
+			if file_data.get("encoding") != "base64" or not encoded_content.strip():
+				raise HTTPException(status_code=422, detail="migration_content_unavailable")
+			content = base64.b64decode(encoded_content).decode("utf-8", errors="strict")
+			if len(content.encode("utf-8")) > MAX_MIGRATION_BYTES:
+				raise HTTPException(status_code=413, detail="migration_file_too_large")
+			return GitHubMigrationSource(path=path, sql=content)
+	except HTTPException:
+		raise
+	except (httpx.HTTPError, KeyError, ValueError, UnicodeDecodeError) as error:
+		raise HTTPException(status_code=502, detail="github_migration_fetch_failed") from error

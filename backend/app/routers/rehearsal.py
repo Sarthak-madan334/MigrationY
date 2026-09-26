@@ -1,12 +1,14 @@
 from uuid import UUID, uuid4
 
 import asyncio
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
 from app.models.schemas import BisectRequest, BisectResponse, RunHistoryResponse, RunRequest, RunResponse, RunResultResponse, RunStatusResponse
+from app.github_client import get_session
 from app.orchestrator.pipeline import run_bisection
 from app.orchestrator.run_manager import manager
+from app.routers.repos import _validate_sql_migration_path
 
 router = APIRouter(prefix="/rehearsal", tags=["rehearsal"])
 
@@ -39,8 +41,14 @@ async def rehearsal_stream(run_id: UUID) -> StreamingResponse:
 
 
 @router.post("/run", response_model=RunResponse, status_code=202)
-async def start_rehearsal(request: RunRequest) -> RunResponse:
-    run_id = manager.create(request)
+async def start_rehearsal(run_request: RunRequest, request: Request) -> RunResponse:
+    if run_request.migration_sql is not None:
+        if get_session(request) is None:
+            raise HTTPException(status_code=401, detail="github_auth_required")
+        if not run_request.repo_id.isdecimal():
+            raise HTTPException(status_code=422, detail="repo_id_must_be_numeric")
+        _validate_sql_migration_path(run_request.migration_path)
+    run_id = manager.create(run_request)
     return RunResponse(run_id=run_id, status="queued")
 
 
@@ -56,6 +64,8 @@ async def bisect_rehearsal(run_id: UUID, request: BisectRequest) -> BisectRespon
         raise HTTPException(status_code=404, detail="run_not_found")
     if record.result is None:
         raise HTTPException(status_code=409, detail="result_not_ready")
+    if record.request.migration_sql:
+        raise HTTPException(status_code=409, detail="bisection_not_supported_for_imported_migrations")
 
     query = next((item for item in record.result.queries if item.id == request.query_id), None)
     if query is None:
