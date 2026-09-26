@@ -34,7 +34,7 @@ export type GitHubMigration = { path: string; diff_preview: string; detected_dia
 export type GitHubMigrationSource = { path: string; sql: string };
 export type FaqTurn = { question: string; answer: string };
 
-const apiOrigin = (process.env.NODE_ENV === "production" ? "https://migrationy.onrender.com" : (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000")).replace(/\/$/, "");
+const apiOrigin = (process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === "production" ? "https://migrationy.onrender.com" : "http://localhost:8000")).replace(/\/$/, "");
 export const apiBase = apiOrigin.endsWith("/api") ? apiOrigin : `${apiOrigin}/api`;
 const requestTimeoutMs = 15_000;
 
@@ -49,12 +49,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     if (response.status === 204) return undefined as T;
     return await response.json() as T;
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "TimeoutError") {
+  } catch (error: any) {
+    if (error?.name === "TimeoutError") {
       throw new Error(`The API request timed out after ${requestTimeoutMs / 1000} seconds.`);
     }
-    if (error instanceof TypeError) {
-      throw new Error(`Could not reach the API at ${apiBase}. Check that the backend is running and NEXT_PUBLIC_API_URL is correct.`);
+    if (error instanceof TypeError || error?.message === "Failed to fetch") {
+      throw new Error(`Cannot reach the rehearsal backend — check your connection, ensure the backend is deployed, or try again later.`);
     }
     throw error;
   }
