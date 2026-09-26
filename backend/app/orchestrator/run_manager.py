@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import RLock
+from time import perf_counter
 from uuid import UUID, uuid4
 
 from app.models.schemas import BisectResponse, LogEntry, RunRequest, RunResultResponse, RunStatusResponse
@@ -83,6 +84,7 @@ class RunManager:
         record = self.get(run_id)
         if record is None:
             return
+        started_at = perf_counter()
         try:
             results = await asyncio.to_thread(
                 run_rehearsal,
@@ -92,11 +94,14 @@ class RunManager:
                 lambda stage, progress, message: self._publish(run_id, stage, progress, message),
                 record.request.migration_sql,
             )
+            if not results:
+                raise RuntimeError("The rehearsal completed without any query measurements.")
             verdict = "regressed" if any(item["verdict"] == "regressed" for item in results) else "clean"
             with self._lock:
                 record.result = RunResultResponse(
                     run_id=run_id,
                     verdict=verdict,
+                    duration_ms=round((perf_counter() - started_at) * 1000, 2),
                     can_bisect=record.request.migration_sql is None,
                     queries=results,
                 )
@@ -108,7 +113,8 @@ class RunManager:
         with self._lock:
             record = self._runs[run_id]
             entry = LogEntry(ts=datetime.now(timezone.utc), level=level, message=message)
-            record.status = RunStatusResponse(run_id=run_id, stage=stage, log=[*record.status.log, entry], progress_pct=progress)
+            failed_stage = record.status.stage if stage == "failed" else None
+            record.status = RunStatusResponse(run_id=run_id, stage=stage, failed_stage=failed_stage, log=[*record.status.log, entry], progress_pct=progress)
             record.status_events.append(record.status)
 
     def publish(self, run_id: UUID, stage: str, progress: int, message: str, level: str = "info") -> None:

@@ -843,6 +843,14 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 	color: rgba(168, 176, 192, 0.8);
 }
 
+.pipeline-step.is-error .pipeline-label,
+.pipeline-node.is-error { color: var(--accent-alert); }
+
+.pipeline-node.is-error {
+	background: rgba(255, 77, 77, 0.1);
+	border: 1px solid rgba(255, 77, 77, 0.4);
+}
+
 .pipeline-copy {
 	flex: 1;
 	min-width: 0;

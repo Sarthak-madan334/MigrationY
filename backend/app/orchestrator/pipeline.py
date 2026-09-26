@@ -105,23 +105,23 @@ def _run_rehearsal(
         connection.commit()
         applied_migration = migration_sql or PHASE1_MIGRATION
         publish("migrating", 45, "Applying selected GitHub migration" if migration_sql else "Applying phase0/add_status_index.sql")
-        measurements_before = [(item, run_query(connection, item.sql), explain_query(connection, item.sql)) for item in manifest.queries]
+        measurements_before = [(item, _median_query_latency(connection, item.sql), explain_query(connection, item.sql)) for item in manifest.queries]
         with connection.cursor() as cursor:
             cursor.execute(applied_migration)
         connection.commit()
         connection.execute("ANALYZE orders")
 
         publish("querying", 65, f"Running query manifest ({len(manifest.queries)} queries)")
-        measurements_after = [(item, run_query(connection, item.sql), explain_query(connection, item.sql)) for item in manifest.queries]
+        measurements_after = [(item, _median_query_latency(connection, item.sql), explain_query(connection, item.sql)) for item in manifest.queries]
         publish("analyzing", 85, "Comparing latency and query plans")
         results: list[dict[str, object]] = []
-        for (item, before, before_plan), (_, after, after_plan) in zip(measurements_before, measurements_after):
-            factor = after.latency_ms / max(before.latency_ms, 0.01)
+        for (item, before, before_plan), (_, after, after_plan) in zip(measurements_before, measurements_after, strict=True):
+            factor = after / max(before, 0.01)
             results.append({
                 "id": item.id,
                 "sql": item.sql,
-                "latency_before_ms": round(before.latency_ms, 2),
-                "latency_after_ms": round(after.latency_ms, 2),
+                "latency_before_ms": round(before, 2),
+                "latency_after_ms": round(after, 2),
                 "regression_factor": round(factor, 2),
                 "verdict": "regressed" if _query_regressed(factor, before_plan, after_plan) else "passed",
                 "plan_before": before_plan,

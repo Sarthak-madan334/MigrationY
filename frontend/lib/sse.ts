@@ -1,6 +1,7 @@
 import { apiBase, getRunStatus, type RunStage, type RunStatus } from "./api";
 
 export type RunConnection = "connecting" | "streaming" | "polling" | "disconnected";
+const maxDisconnectTimeMs = 30_000;
 
 function isTerminal(stage: RunStage) {
   return stage === "done" || stage === "failed";
@@ -10,10 +11,12 @@ export function subscribeToRunStatus(
   runId: string,
   onStatus: (status: RunStatus) => void,
   onConnection: (connection: RunConnection) => void,
+  onTimeout: () => void,
 ) {
   let stopped = false;
   let pollingTimer: number | undefined;
   let pollingInFlight = false;
+  let disconnectedSince: number | null = null;
   const streamUrl = `${apiBase.replace(/\/$/, "")}/rehearsal/${encodeURIComponent(runId)}/stream`;
   const source = new EventSource(streamUrl, { withCredentials: true });
 
@@ -34,9 +37,17 @@ export function subscribeToRunStatus(
     pollingInFlight = true;
     try {
       receive(await getRunStatus(runId));
+      disconnectedSince = null;
       if (!stopped) onConnection("polling");
     } catch {
-      if (!stopped) onConnection("disconnected");
+      if (!stopped) {
+        disconnectedSince ??= Date.now();
+        onConnection("disconnected");
+        if (Date.now() - disconnectedSince >= maxDisconnectTimeMs) {
+          stop();
+          onTimeout();
+        }
+      }
     } finally {
       pollingInFlight = false;
     }
@@ -45,6 +56,7 @@ export function subscribeToRunStatus(
   const fallBackToPolling = () => {
     if (stopped || pollingTimer !== undefined) return;
     source.close();
+    disconnectedSince ??= Date.now();
     onConnection("polling");
     pollingTimer = window.setInterval(poll, 1500);
     void poll();

@@ -19,22 +19,34 @@ function RunContent({ id }: { id: string }) {
 	const [status, setStatus] = useState<RunStatus>({ run_id: id, stage: "queued", log: fallbackLogs, progress_pct: 0 });
 	const [connection, setConnection] = useState<RunConnection>("connecting");
 	const [refreshing, setRefreshing] = useState(false);
+	const [connectionError, setConnectionError] = useState<string | null>(null);
+	const [connectionAttempt, setConnectionAttempt] = useState(0);
 
 	async function refreshStatus() {
 		setRefreshing(true);
 		try {
 			const next = await getRunStatus(id);
 			setStatus(next);
-		} catch {
+			setConnectionError(null);
+		} catch (error) {
 			setConnection("disconnected");
+			setConnectionError(error instanceof Error ? error.message : "The backend could not return this run's status.");
 		} finally {
 			window.setTimeout(() => setRefreshing(false), 400);
 		}
 	}
 
 	useEffect(() => {
-		return subscribeToRunStatus(id, setStatus, setConnection);
-	}, [id]);
+		return subscribeToRunStatus(
+			id,
+			setStatus,
+			(next) => {
+				setConnection(next);
+				if (next === "streaming" || next === "polling") setConnectionError(null);
+			},
+			() => setConnectionError("The backend did not respond for 30 seconds. Check the API and retry this run."),
+		);
+	}, [id, connectionAttempt]);
 
 	useEffect(() => {
 		if (status.stage !== "done") return;
@@ -45,6 +57,12 @@ function RunContent({ id }: { id: string }) {
 	const visibleStage: RunStage = status.stage;
 	const log = status.log.length ? status.log : fallbackLogs;
 	const progressValue = Math.min(Math.max(status.progress_pct ?? 0, 0), 100);
+	const retryConnection = () => {
+		setConnectionError(null);
+		setConnection("connecting");
+		setConnectionAttempt((attempt) => attempt + 1);
+		void refreshStatus();
+	};
 
 	return (
 		<main className="run-shell">
@@ -94,7 +112,7 @@ function RunContent({ id }: { id: string }) {
 							<RefreshCw className={refreshing ? "spin-refresh" : ""} size={15} />
 						</button>
 					</div>
-					<PipelineStages stage={visibleStage} />
+					<PipelineStages stage={visibleStage} failedStage={status.failed_stage} />
 				</section>
 				<LiveLogPanel lines={log} connection={connection} />
 			</div>
@@ -102,7 +120,8 @@ function RunContent({ id }: { id: string }) {
 			{status.stage === "failed" ? (
 				<div className="error-banner" role="alert">{status.log.at(-1)?.message ?? "The rehearsal failed. Check the backend and try again."}</div>
 			) : null}
-			{connection === "disconnected" ? <p className="mt-4 text-sm text-warn" role="status">The backend is unreachable. Retrying the run status automatically.</p> : null}
+			{connectionError ? <div className="error-banner" role="alert"><span>{connectionError}</span><button type="button" className="button-secondary" onClick={retryConnection}><RefreshCw size={14} /> Retry connection</button></div> : null}
+			{connection === "disconnected" && !connectionError ? <p className="mt-4 text-sm text-warn" role="status">The backend is unreachable. Retrying the run status automatically.</p> : null}
 			{status.stage === "done" ? (
 				<div className="run-footer">
 					<Link className="button-primary" href={`/run/${id}/report`}>Open results <ArrowRight size={16} /></Link>

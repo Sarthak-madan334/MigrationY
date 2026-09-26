@@ -3,6 +3,7 @@ export type RunStage = "queued" | "provisioning" | "seeding" | "migrating" | "qu
 export type RunStatus = {
   run_id: string;
   stage: RunStage;
+  failed_stage?: RunStage | null;
   log: { ts: string; level: "info" | "warn" | "error"; message: string }[];
   progress_pct: number;
 };
@@ -18,7 +19,7 @@ export type QueryResult = {
   plan_after: string;
 };
 
-export type RehearsalResult = { run_id: string; verdict: "regressed" | "clean"; can_bisect: boolean; queries: QueryResult[] };
+export type RehearsalResult = { run_id: string; verdict: "regressed" | "clean"; duration_ms: number; can_bisect: boolean; queries: QueryResult[] };
 export type RunHistoryItem = { run_id: string; repo: string; migration: string; verdict: "regressed" | "clean" | "running" | "failed"; created_at: string };
 export type BisectResult = {
   query_id: string;
@@ -33,16 +34,30 @@ export type GitHubMigration = { path: string; diff_preview: string; detected_dia
 export type GitHubMigrationSource = { path: string; sql: string };
 export type FaqTurn = { question: string; answer: string };
 
-export const apiBase = process.env.NEXT_PUBLIC_API_URL ?? (process.env.NODE_ENV === "production" ? "https://migrationy.onrender.com/api" : "http://localhost:8000/api");
+const apiOrigin = (process.env.NEXT_PUBLIC_API_URL ?? (process.env.NODE_ENV === "production" ? "https://migrationy.onrender.com" : "http://localhost:8000")).replace(/\/$/, "");
+export const apiBase = apiOrigin.endsWith("/api") ? apiOrigin : `${apiOrigin}/api`;
+const requestTimeoutMs = 15_000;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${apiBase}${path}`, { ...init, credentials: "include", headers: { "Content-Type": "application/json", ...init?.headers } });
-  if (!response.ok) {
-    const payload = await response.json().catch(() => null) as { detail?: string } | null;
-    throw new Error(payload?.detail ? `${response.status}: ${payload.detail}` : `API request failed: ${response.status}`);
+  const timeoutSignal = AbortSignal.timeout(requestTimeoutMs);
+  const signal = init?.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal;
+  try {
+    const response = await fetch(`${apiBase}${path}`, { ...init, signal, credentials: "include", headers: { "Content-Type": "application/json", ...init?.headers } });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null) as { detail?: string } | null;
+      throw new Error(payload?.detail ? `${response.status}: ${payload.detail}` : `API request failed: ${response.status}`);
+    }
+    if (response.status === 204) return undefined as T;
+    return await response.json() as T;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "TimeoutError") {
+      throw new Error(`The API request timed out after ${requestTimeoutMs / 1000} seconds.`);
+    }
+    if (error instanceof TypeError) {
+      throw new Error(`Could not reach the API at ${apiBase}. Check that the backend is running and NEXT_PUBLIC_API_URL is correct.`);
+    }
+    throw error;
   }
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
 }
 
 export function createRehearsal(source?: { repo_id: string; migration_path: string; migration_sql: string }) {

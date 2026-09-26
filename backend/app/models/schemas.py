@@ -16,7 +16,7 @@ class QueryManifestItem(BaseModel):
 
 
 class QueryManifest(BaseModel):
-    queries: list[QueryManifestItem]
+    queries: list[QueryManifestItem] = Field(min_length=1)
 
 
 class CorruptionProfile(BaseModel):
@@ -48,6 +48,7 @@ class LogEntry(BaseModel):
 class RunStatusResponse(BaseModel):
     run_id: UUID
     stage: Literal["queued", "provisioning", "seeding", "migrating", "querying", "analyzing", "bisecting", "done", "failed"]
+    failed_stage: Literal["queued", "provisioning", "seeding", "migrating", "querying", "analyzing", "bisecting"] | None = None
     log: list[LogEntry]
     progress_pct: int
 
@@ -78,6 +79,7 @@ class QueryResult(BaseModel):
 class RunResultResponse(BaseModel):
     run_id: UUID
     verdict: Literal["regressed", "clean"]
+    duration_ms: float = Field(ge=0)
     can_bisect: bool = True
     queries: list[QueryResult]
 

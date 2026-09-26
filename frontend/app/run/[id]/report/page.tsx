@@ -22,12 +22,13 @@ function ReportContent({ id }: { id: string }) {
 		let active = true;
 		getRunResult(id)
 			.then((next) => { if (active) setResult(next); })
-			.catch(() => { if (active) setError("The backend could not return this run's results."); })
+			.catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "The backend could not return this run's results."); })
 			.finally(() => { if (active) setLoading(false); });
 		return () => { active = false; };
 	}, [id]);
 
 	const regressions = result?.queries.filter((query) => query.verdict === "regressed") ?? [];
+	const leadRegression = regressions[0];
 	async function exportRepro() {
 		const query = regressions[0];
 		if (!query || exporting) return;
@@ -65,6 +66,18 @@ function ReportContent({ id }: { id: string }) {
 		{!loading && result ? <>
 			<div className="mb-8"><div className="eyebrow mb-4">Rehearsal verdict</div><h1 className="font-display text-4xl tracking-[-0.03em]">The workload has been measured.</h1></div>
 			<VerdictBanner regressed={regressions.length} total={result.queries.length} />
+			<div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 border border-border bg-surface px-5 py-4">
+				<span className="font-mono text-xs uppercase tracking-[0.12em] text-muted">Execution time</span>
+				<strong className="font-mono text-sm text-ink">{result.duration_ms.toLocaleString(undefined, { maximumFractionDigits: 2 })} ms</strong>
+			</div>
+			{leadRegression ? <section className="panel mt-6 border-l-2 border-l-alert">
+				<div className="eyebrow">First regression / query {leadRegression.id}</div>
+				<pre className="mt-3 overflow-x-auto border border-border bg-surface p-4 font-mono text-xs leading-6 text-mono">{leadRegression.sql}</pre>
+				<div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+					<p className="text-sm text-muted">The run records plan and timing evidence. Bisection can isolate a minimal reproducing row subset.</p>
+					<Link className="button-secondary shrink-0" href={`/run/${id}/cause?query=${encodeURIComponent(leadRegression.id)}`}>Find minimal reproducing subset</Link>
+				</div>
+			</section> : null}
 			<div className="mt-8 flex flex-wrap items-center justify-between gap-4">
 				<div><div className="font-display text-xl">Query results</div><div className="mt-1 text-sm text-muted">Before and after measurements from the shadow database.</div></div>
 				{regressions.length && result.can_bisect ? <button className="button-secondary" onClick={exportRepro} disabled={exporting}>

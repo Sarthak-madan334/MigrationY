@@ -38,7 +38,7 @@ def _run_record(query_verdict: str = "regressed") -> tuple[object, SimpleNamespa
 	)
 	record = SimpleNamespace(
 		request=RunRequest(),
-		result=RunResultResponse(run_id=run_id, verdict="regressed", queries=[query]),
+		result=RunResultResponse(run_id=run_id, verdict="regressed", duration_ms=100, queries=[query]),
 	)
 	return run_id, record
 
