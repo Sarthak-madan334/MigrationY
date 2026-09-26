@@ -19,6 +19,7 @@ from app.shadow_db.teardown import teardown
 
 
 PHASE0_MIGRATION: Final[str] = "CREATE INDEX orders_status_idx ON orders (status)"
+SAFE_DEMO_MIGRATION: Final[str] = "CREATE INDEX orders_customer_email_idx ON orders (customer_email)"
 PHASE1_MIGRATION: Final[str] = "DROP INDEX orders_created_at_idx; CREATE INDEX orders_status_idx ON orders (status)"
 PHASE0_QUERY: Final[str] = "SELECT COUNT(*) FROM orders WHERE status IS NULL"
 _SHADOW_DB_LOCK = Lock()
@@ -77,6 +78,7 @@ def _run_rehearsal(
     raw_manifest: str | None,
     publish: callable,
     migration_sql: str | None = None,
+    demo_scenario: str = "regression",
 ) -> list[dict[str, object]]:
     """Run one measured rehearsal while publishing state transitions to the API."""
     compose_file = repo_root / "infra" / "docker-compose.yml"
@@ -102,8 +104,13 @@ def _run_rehearsal(
         with connection.cursor() as cursor:
             cursor.execute("CREATE INDEX orders_created_at_idx ON orders (created_at)")
         connection.commit()
-        applied_migration = migration_sql or PHASE1_MIGRATION
-        publish("migrating", 45, "Applying selected GitHub migration" if migration_sql else "Applying phase0/add_status_index.sql")
+        applied_migration = migration_sql or (SAFE_DEMO_MIGRATION if demo_scenario == "safe" else PHASE1_MIGRATION)
+        migration_label = (
+            "Applying selected GitHub migration" if migration_sql
+            else "Applying safe demo index migration" if demo_scenario == "safe"
+            else "Applying intentional query-regression demo migration"
+        )
+        publish("migrating", 45, migration_label)
         measurements_before = [(item, _median_query_latency(connection, item.sql), explain_query(connection, item.sql)) for item in manifest.queries]
         with connection.cursor() as cursor:
             cursor.execute(applied_migration)
@@ -137,10 +144,11 @@ def run_rehearsal(
     raw_manifest: str | None,
     publish: callable,
     migration_sql: str | None = None,
+    demo_scenario: str = "regression",
 ) -> list[dict[str, object]]:
     """Serialize access to the shared local shadow Postgres service."""
     with _SHADOW_DB_LOCK:
-        return _run_rehearsal(repo_root, corruption_profile, raw_manifest, publish, migration_sql)
+        return _run_rehearsal(repo_root, corruption_profile, raw_manifest, publish, migration_sql, demo_scenario)
 
 
 def _plan_signature(plan: str) -> tuple[str, ...]:

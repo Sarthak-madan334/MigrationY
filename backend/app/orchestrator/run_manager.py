@@ -93,6 +93,7 @@ class RunManager:
                 record.request.query_manifest,
                 lambda stage, progress, message: self._publish(run_id, stage, progress, message),
                 record.request.migration_sql,
+                record.request.demo_scenario,
             )
             if not results:
                 raise RuntimeError("The rehearsal completed without any query measurements.")
@@ -103,6 +104,7 @@ class RunManager:
                     verdict=verdict,
                     duration_ms=round((perf_counter() - started_at) * 1000, 2),
                     can_bisect=record.request.migration_sql is None,
+                    demo_scenario=record.request.demo_scenario if record.request.migration_sql is None else None,
                     queries=results,
                 )
             self._publish(run_id, "done", 100, f"Rehearsal complete: {verdict} verdict")

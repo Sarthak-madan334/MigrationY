@@ -19,7 +19,7 @@ export type QueryResult = {
   plan_after: string;
 };
 
-export type RehearsalResult = { run_id: string; verdict: "regressed" | "clean"; duration_ms: number; can_bisect: boolean; queries: QueryResult[] };
+export type RehearsalResult = { run_id: string; verdict: "regressed" | "clean"; duration_ms: number; can_bisect: boolean; demo_scenario?: "safe" | "regression" | null; queries: QueryResult[] };
 export type RunHistoryItem = { run_id: string; repo: string; migration: string; verdict: "regressed" | "clean" | "running" | "failed"; created_at: string };
 export type BisectResult = {
   query_id: string;
@@ -60,8 +60,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 }
 
-export function createRehearsal(source?: { repo_id: string; migration_path: string; migration_sql: string }) {
-  return request<{ run_id: string; status: "queued" }>("/rehearsal/run", { method: "POST", body: JSON.stringify({ repo_id: source?.repo_id ?? "phase-0-demo", migration_path: source?.migration_path ?? "phase0/add_status_index.sql", migration_sql: source?.migration_sql, query_manifest: null, corruption_profile: { null_pressure: 0.15, duplication_rate: 0, legacy_format_rate: 0, row_count_per_table: 50 } }) });
+export function createRehearsal(source?: { repo_id: string; migration_path: string; migration_sql: string }, demoScenario: "safe" | "regression" = "regression") {
+  const demoPath = demoScenario === "safe" ? "demo/safe_email_index.sql" : "demo/drop_created_at_index.sql";
+  return request<{ run_id: string; status: "queued" }>("/rehearsal/run", { method: "POST", body: JSON.stringify({ repo_id: source?.repo_id ?? "phase-0-demo", migration_path: source?.migration_path ?? demoPath, migration_sql: source?.migration_sql, demo_scenario: demoScenario, query_manifest: null, corruption_profile: { null_pressure: 0.15, duplication_rate: 0, legacy_format_rate: 0, row_count_per_table: 50 } }) });
 }
 
 export function getRunStatus(runId: string) { return request<RunStatus>(`/rehearsal/${runId}/status`); }

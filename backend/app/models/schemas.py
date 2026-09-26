@@ -30,6 +30,7 @@ class RunRequest(BaseModel):
     repo_id: str = "phase-0-demo"
     migration_path: str = "phase0/add_status_index.sql"
     migration_sql: str | None = Field(default=None, max_length=100_000)
+    demo_scenario: Literal["safe", "regression"] = "regression"
     query_manifest: str | None = None
     corruption_profile: CorruptionProfile = CorruptionProfile()
 
@@ -81,6 +82,7 @@ class RunResultResponse(BaseModel):
     verdict: Literal["regressed", "clean"]
     duration_ms: float = Field(ge=0)
     can_bisect: bool = True
+    demo_scenario: Literal["safe", "regression"] | None = None
     queries: list[QueryResult]
 
 

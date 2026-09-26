@@ -10,13 +10,14 @@ export default function ConnectPage() {
 	const [error, setError] = useState<string | null>(null);
 	const [githubUser, setGitHubUser] = useState<GitHubUser | null>(null);
 	const [repos, setRepos] = useState<GitHubRepo[]>([]);
-	const [selectedRepoId, setSelectedRepoId] = useState("sample");
+	const [selectedRepoId, setSelectedRepoId] = useState("sample-safe");
 	const [migrations, setMigrations] = useState<GitHubMigration[]>([]);
-	const [selectedMigrationPath, setSelectedMigrationPath] = useState("phase0/add_status_index.sql");
+	const [selectedMigrationPath, setSelectedMigrationPath] = useState("demo/safe_email_index.sql");
 	const [checkingSession, setCheckingSession] = useState(true);
 	const [loadingMigrations, setLoadingMigrations] = useState(false);
 	const [connecting, setConnecting] = useState(false);
-	const sampleMode = selectedRepoId === "sample";
+	const sampleMode = selectedRepoId.startsWith("sample-");
+	const demoScenario = selectedRepoId === "sample-safe" ? "safe" : "regression";
 	const selectedMigration = migrations.find((migration) => migration.path === selectedMigrationPath);
 
 	useEffect(() => {
@@ -47,7 +48,7 @@ export default function ConnectPage() {
 	useEffect(() => {
 		if (!githubUser || sampleMode) {
 			setMigrations([]);
-			setSelectedMigrationPath(sampleMode ? "phase0/add_status_index.sql" : "");
+			setSelectedMigrationPath(sampleMode ? (demoScenario === "safe" ? "demo/safe_email_index.sql" : "demo/drop_created_at_index.sql") : "");
 			return;
 		}
 		let active = true;
@@ -63,7 +64,7 @@ export default function ConnectPage() {
 			.catch(() => { if (active) setError("Migration files could not be loaded from this repository."); })
 			.finally(() => { if (active) setLoadingMigrations(false); });
 		return () => { active = false; };
-	}, [githubUser, sampleMode, selectedRepoId]);
+	}, [githubUser, sampleMode, selectedRepoId, demoScenario]);
 
 	async function connectGitHub() {
 		setConnecting(true);
@@ -84,7 +85,7 @@ export default function ConnectPage() {
 			await disconnectGitHub();
 			setGitHubUser(null);
 			setRepos([]);
-			setSelectedRepoId("sample");
+			setSelectedRepoId("sample-safe");
 		} catch {
 			setError("GitHub could not be disconnected.");
 		}
@@ -99,7 +100,7 @@ export default function ConnectPage() {
 		setError(null);
 		try {
 			const source = sampleMode ? undefined : await getGitHubMigrationSource(selectedRepoId, selectedMigrationPath);
-			const run = await createRehearsal(source ? { repo_id: selectedRepoId, migration_path: source.path, migration_sql: source.sql } : undefined);
+			const run = await createRehearsal(source ? { repo_id: selectedRepoId, migration_path: source.path, migration_sql: source.sql } : undefined, demoScenario);
 			window.location.href = `/run/${run.run_id}`;
 		} catch (runError) {
 			const reason = runError instanceof Error ? runError.message : "Unknown error";
@@ -143,7 +144,8 @@ export default function ConnectPage() {
 					<label className="block">
 						<span className="code-label">Repository</span>
 						<select className="manifest-toggle mt-2" value={selectedRepoId} onChange={(event) => setSelectedRepoId(event.target.value)} aria-label="Select repository">
-							<option value="sample">Built-in example</option>
+							<option value="sample-safe">Demo database · Safe migration</option>
+							<option value="sample-regression">Demo database · Intentional regression</option>
 							{repos.map((repo) => <option value={repo.id} key={repo.id}>{repo.full_name}</option>)}
 						</select>
 					</label>
@@ -152,9 +154,8 @@ export default function ConnectPage() {
 						<span className="code-label">Detected migration</span>
 						{loadingMigrations ? <span className="manifest-toggle mt-2 justify-start">Loading migration files...</span> : migrations.length ? <select className="manifest-toggle mt-2" value={selectedMigrationPath} onChange={(event) => setSelectedMigrationPath(event.target.value)} aria-label="Select migration">{migrations.map((migration) => <option value={migration.path} key={migration.path}>{migration.path}</option>)}</select> : <span className="manifest-toggle mt-2 justify-start">No migration files detected</span>}
 					</label> : <div className="code-block mt-4">
-						<div className="code-label">Built-in PostgreSQL migration</div>
-						<div className="diff-line" style={{ animationDelay: "220ms" }}>+ CREATE INDEX orders_status_idx</div>
-						<div className="diff-line" style={{ animationDelay: "300ms" }}>+ ON orders (status);</div>
+						<div className="code-label">{demoScenario === "safe" ? "Safe demo migration" : "Regression demo migration"}</div>
+						{demoScenario === "safe" ? <><div className="diff-line" style={{ animationDelay: "220ms" }}>+ CREATE INDEX orders_customer_email_idx</div><div className="diff-line" style={{ animationDelay: "300ms" }}>+ ON orders (customer_email);</div></> : <><div className="diff-line" style={{ animationDelay: "220ms" }}>- DROP INDEX orders_created_at_idx;</div><div className="diff-line" style={{ animationDelay: "300ms" }}>+ CREATE INDEX orders_status_idx ON orders (status);</div></>}
 					</div>}
 					{!sampleMode && selectedMigration ? <pre className="code-block mt-3 max-h-36 overflow-auto whitespace-pre-wrap">{selectedMigration.diff_preview}</pre> : null}
 				</section>
@@ -178,9 +179,9 @@ export default function ConnectPage() {
 			</div>
 
 			<div className="connect-footer">
-				<div className="footer-note"><FileCode2 size={15} /> {sampleMode ? "Runs the example migration against 50 generated orders and six sample queries." : "Runs on 50 generated orders and six sample queries. Migration must match the demo orders schema."}</div>
+				<div className="footer-note"><FileCode2 size={15} /> {sampleMode ? `Runs the ${demoScenario === "safe" ? "safe" : "intentional regression"} demo against 50 generated orders and six sample queries.` : "Runs on 50 generated orders and six sample queries. Migration must match the demo orders schema."}</div>
 				<div className="flex items-center gap-3">
-					{!sampleMode ? <button className="button-secondary" onClick={() => setSelectedRepoId("sample")}>Use built-in example</button> : null}
+					{!sampleMode ? <button className="button-secondary" onClick={() => setSelectedRepoId("sample-safe")}>Use demo database</button> : null}
 					<button className="button-primary" disabled={starting || (!sampleMode && (!selectedMigration || selectedMigration.detected_dialect !== "postgres" || !selectedMigrationPath.toLowerCase().endsWith(".sql")))} onClick={startRun}>{starting ? <><LoaderCircle className="animate-spin" size={15} /> Starting…</> : <>Run Rehearsal<ArrowRight size={16} /></>}</button>
 				</div>
 			</div>
