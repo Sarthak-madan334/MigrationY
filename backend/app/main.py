@@ -11,6 +11,7 @@ app = FastAPI(title="Migration Rehearsal Agent")
 cors_origins = {
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://migration-z.vercel.app",
     settings.frontend_url.rstrip("/"),
     *(origin.strip().rstrip("/") for origin in os.getenv("CORS_ORIGINS", "").split(",") if origin.strip()),
 }
