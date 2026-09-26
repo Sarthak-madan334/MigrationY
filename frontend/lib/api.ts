@@ -34,7 +34,13 @@ export type GitHubMigration = { path: string; diff_preview: string; detected_dia
 export type GitHubMigrationSource = { path: string; sql: string };
 export type FaqTurn = { question: string; answer: string };
 
-const apiOrigin = (process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === "production" ? "https://migrationy.onrender.com" : "http://localhost:8000")).replace(/\/$/, "");
+const productionApiOrigin = "https://migrationy.onrender.com";
+const configuredApiOrigin = process.env.NEXT_PUBLIC_API_URL?.trim() || undefined;
+const configuredLoopback = configuredApiOrigin !== undefined
+  && /^https?:\/\/(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[::1\])(?::\d+)?(?:\/|$)/i.test(configuredApiOrigin);
+const apiOrigin = (process.env.NODE_ENV === "production" && configuredLoopback
+  ? productionApiOrigin
+  : configuredApiOrigin ?? (process.env.NODE_ENV === "production" ? productionApiOrigin : "http://localhost:8000")).replace(/\/+$/, "");
 export const apiBase = apiOrigin.endsWith("/api") ? apiOrigin : `${apiOrigin}/api`;
 const requestTimeoutMs = 15_000;
 
@@ -49,12 +55,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     if (response.status === 204) return undefined as T;
     return await response.json() as T;
-  } catch (error: any) {
-    if (error?.name === "TimeoutError") {
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "TimeoutError") {
       throw new Error(`The API request timed out after ${requestTimeoutMs / 1000} seconds.`);
     }
-    if (error instanceof TypeError || error?.message === "Failed to fetch") {
-      throw new Error(`Cannot reach the rehearsal backend — check your connection, ensure the backend is deployed, or try again later.`);
+    if (error instanceof TypeError || (error instanceof Error && error.message === "Failed to fetch")) {
+      throw new Error("Cannot reach the rehearsal backend. Check your connection, confirm the backend is deployed, or try again later.");
     }
     throw error;
   }

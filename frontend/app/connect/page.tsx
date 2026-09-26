@@ -185,7 +185,7 @@ export default function ConnectPage() {
 					<button className="button-primary" disabled={starting || (!sampleMode && (!selectedMigration || selectedMigration.detected_dialect !== "postgres" || !selectedMigrationPath.toLowerCase().endsWith(".sql")))} onClick={startRun}>{starting ? <><LoaderCircle className="animate-spin" size={15} /> Starting…</> : <>Run Rehearsal<ArrowRight size={16} /></>}</button>
 				</div>
 			</div>
-			{error ? <div className="error-banner"><X size={14} /> {error}</div> : null}
+			{error ? <div className="error-banner" role="alert"><X size={14} /> {error}</div> : null}
 		</main>
 	);
 }
