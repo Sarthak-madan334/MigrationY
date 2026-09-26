@@ -1,0 +1,13 @@
+queries:
+  - id: q1
+    sql: "SELECT COUNT(*) FROM orders WHERE status IS NULL"
+  - id: q2
+    sql: "SELECT COUNT(*) FROM orders WHERE status = 'paid'"
+  - id: q3
+    sql: "SELECT AVG(total_cents) FROM orders"
+  - id: q4
+    sql: "SELECT COUNT(*) FROM orders WHERE legacy_format = TRUE"
+  - id: q5
+    sql: "SELECT status, COUNT(*) FROM orders GROUP BY status"
+  - id: q6
+    sql: "SELECT id, customer_email FROM orders ORDER BY created_at DESC LIMIT 25"

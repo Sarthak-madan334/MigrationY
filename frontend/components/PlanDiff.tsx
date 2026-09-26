@@ -1,0 +1,3 @@
+export function PlanDiff({ before, after }: { before: string; after: string }) {
+  return <div className="grid gap-px border border-border bg-border md:grid-cols-2"><div className="bg-surface p-4"><div className="mb-3 font-mono text-[11px] uppercase tracking-[0.12em] text-muted">Before migration</div><pre className="whitespace-pre-wrap font-mono text-xs leading-6 text-mono">{before || "EXPLAIN output unavailable"}</pre></div><div className="bg-surface p-4"><div className="mb-3 font-mono text-[11px] uppercase tracking-[0.12em] text-muted">After migration</div><pre className="whitespace-pre-wrap font-mono text-xs leading-6 text-alert">{after || "EXPLAIN output unavailable"}</pre></div></div>;
+}

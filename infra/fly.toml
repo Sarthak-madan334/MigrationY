@@ -1,0 +1,4 @@
+app = "migration-rehearsal-agent"
+
+[build]
+  dockerfile = "backend/Dockerfile"
