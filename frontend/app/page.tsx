@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, ChevronDown, ChevronUp, Circle, Clock3, Database, FileCode2, Github, Play, ShieldCheck, Sparkles, Terminal, TriangleAlert } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Check, ChevronDown, ChevronUp, Circle, Clock3, Database, FileCode2, Github, Play, ShieldCheck, Sparkles, Terminal, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { askFaqQuestion, createRehearsal, getRunResult, getRunStatus, type FaqTurn, type QueryResult, type RunStage, type RunStatus } from "@/lib/api";
@@ -54,6 +54,47 @@ export default function LandingPage() {
 		<section className="contrast-section"><div className="section-kicker"><span>02</span> WHY REHEARSAL</div><div className="contrast-grid"><Contrast title="WITHOUT REHEARSAL" tone="muted" steps={["Migration looks valid", "Production", "Rows break it"]} /><div className="contrast-divider">VS</div><Contrast title="WITH MIGRATION REHEARSAL" tone="signal" steps={["Migration tested", "Violating rows discovered", "Blocked before production"]} /></div></section>
 		<section className="how-section" id="how-it-works"><div className="section-kicker"><span>03</span> HOW IT WORKS</div><div className="how-grid"><HowStep icon={<FileCode2 size={18} />} label="SCHEMA" copy="Read the structure and migration." /><HowStep icon={<Sparkles size={18} />} label="DATA" copy="Generate realistic edge conditions." /><HowStep icon={<Database size={18} />} label="REHEARSE" copy="Execute against an isolated database and observe the result." /></div><div className="evidence-claim"><Terminal size={16} /> Every finding comes with evidence.</div></section>
 		<FaqPanel open={faqOpen} setOpen={setFaqOpen} />
+		<footer className="site-footer">
+			<div className="site-footer-inner">
+				<div className="site-footer-top">
+					<div className="site-footer-brand">
+						<BrandMark />
+						<span className="brand-text brand-text--footer">MIGRATION REHEARSAL</span>
+					</div>
+					<div className="site-footer-columns">
+						<div className="site-footer-column">
+							<h3>Product</h3>
+							<nav>
+								<Link href="#rehearsal" className="site-footer-link">Connect a Repo</Link>
+								<Link href="#rehearsal" className="site-footer-link">View Rehearsal Surface</Link>
+								<Link href="#how-it-works" className="site-footer-link">Docs</Link>
+							</nav>
+						</div>
+						<div className="site-footer-column">
+							<h3>Resources</h3>
+							<nav>
+								<a href="https://github.com/" target="_blank" rel="noreferrer" className="site-footer-link">GitHub</a>
+								<Link href="/connect" className="site-footer-link">Sample Manifests</Link>
+							</nav>
+						</div>
+						<div className="site-footer-column">
+							<h3>Company</h3>
+							<nav>
+								<Link href="/" className="site-footer-link">About</Link>
+								<a href="mailto:hello@migrationrehearsal.dev" className="site-footer-link">Contact</a>
+							</nav>
+						</div>
+					</div>
+				</div>
+				<div className="site-footer-divider" />
+				<div className="site-footer-bottom">
+					<div className="site-footer-copyright">© 2026 Migration Rehearsal</div>
+					<button className="site-footer-action" aria-label="Scroll to top" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+						<ArrowUpRight size={18} />
+					</button>
+				</div>
+			</div>
+		</footer>
 	</main>;
 }
 
